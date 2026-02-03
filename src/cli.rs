@@ -48,4 +48,10 @@ pub enum Commands {
 
     /// 現在の状態を表示
     Status,
+
+    /// S3からプロジェクトをクローン
+    Clone {
+        /// プロジェクト名
+        project: String,
+    },
 }

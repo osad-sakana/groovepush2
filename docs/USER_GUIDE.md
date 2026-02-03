@@ -63,6 +63,14 @@ Samples/Archive/
 1. 環境変数 (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
 2. `~/.aws/credentials` ファイル
 
+### 4. S3からプロジェクトをクローン
+
+```bash
+gp clone my-project
+```
+
+カレントディレクトリに`my-project/`フォルダが作成され、最新のスナップショットが復元されます。
+
 ## コマンド一覧
 
 すべてのコマンドはカレントディレクトリで実行します。
@@ -74,3 +82,4 @@ Samples/Archive/
 | `gp status` | 状態確認 |
 | `gp log` | 履歴表示 |
 | `gp checkout <id>` | 指定スナップショットに復元 |
+| `gp clone <project>` | S3からプロジェクトをクローン |
