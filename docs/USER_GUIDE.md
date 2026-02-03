@@ -10,8 +10,11 @@ cargo install --path .
 
 ### 1. プロジェクトの初期化
 
+プロジェクトディレクトリに移動して実行：
+
 ```bash
-gp init /path/to/your/project
+cd /path/to/your/project
+gp init
 ```
 
 これにより以下が作成されます：
@@ -21,7 +24,7 @@ gp init /path/to/your/project
 ### 2. 状態の確認
 
 ```bash
-gp status /path/to/your/project
+gp status
 ```
 
 ローカルファイル数、合計サイズ、変更ファイル数を表示します。
@@ -30,13 +33,13 @@ gp status /path/to/your/project
 
 ```bash
 # 基本的なプッシュ
-gp push /path/to/your/project
+gp push
 
 # メッセージ付き
-gp push /path/to/your/project -m "ミックス完了"
+gp push -m "ミックス完了"
 
 # ドライラン（実際にはアップロードしない）
-gp push /path/to/your/project --dry-run
+gp push --dry-run
 ```
 
 ## .gp-ignore 設定
@@ -62,10 +65,12 @@ Samples/Archive/
 
 ## コマンド一覧
 
+すべてのコマンドはカレントディレクトリで実行します。
+
 | コマンド | 説明 |
 |---------|------|
-| `gp init <path>` | プロジェクト初期化 |
-| `gp push <path>` | S3にプッシュ |
-| `gp status <path>` | 状態確認 |
-| `gp log` | 履歴表示（フェーズ2） |
-| `gp checkout` | 復元（フェーズ2） |
+| `gp init` | プロジェクト初期化 |
+| `gp push` | S3にプッシュ |
+| `gp status` | 状態確認 |
+| `gp log` | 履歴表示 |
+| `gp checkout <id>` | 指定スナップショットに復元 |
