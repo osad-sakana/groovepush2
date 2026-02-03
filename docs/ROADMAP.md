@@ -6,12 +6,13 @@
 - [x] Smart Diff - 変更ファイルのみ検出
 - [x] Auto Ignore - .gp-ignore対応
 
-## フェーズ 2: Gitライクな履歴管理
+## フェーズ 2: Gitライクな履歴管理 ✅
 
-- [ ] `gp push -m "メッセージ"` - コミットメッセージ保存
-- [ ] `gp log` - スナップショット履歴表示
-- [ ] `gp checkout [timestamp]` - 過去の状態に復元
-- [ ] history.json によるコミット履歴管理
+- [x] `gp push -m "メッセージ"` - コミットメッセージ保存
+- [x] `gp log` - スナップショット履歴表示
+- [x] `gp checkout [snapshot_id]` - 過去の状態に復元
+- [x] history.json によるコミット履歴管理
+- [x] Content-Addressable Storage (CAS) による重複排除
 
 ## フェーズ 3: 音楽制作特化機能
 

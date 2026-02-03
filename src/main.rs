@@ -6,10 +6,12 @@ mod storage;
 use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands};
+use indicatif::{ProgressBar, ProgressStyle};
 use scanner::{diff_files, Scanner};
-use storage::{extract_project_name, S3Storage};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use storage::{extract_project_name, History, S3Storage, Snapshot};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -72,25 +74,158 @@ async fn push_command(path: &Path, message: Option<&str>, dry_run: bool) -> Resu
         return Ok(());
     }
 
+    println!("blobsにアップロード中...");
+    let new_blobs = storage.upload_blobs(&project_name, &changed_files).await?;
+    println!("新規blob: {} 件", new_blobs);
+
+    println!("ファイルをアップロード中...");
     storage.upload_files(&project_name, &changed_files).await?;
     storage.save_state(&project_name, &local_files).await?;
 
+    let mut history = storage
+        .get_history(&project_name)
+        .await?
+        .unwrap_or_else(|| History::new(&project_name));
+
+    let parent_id = history.head.clone();
+
+    let files_map: HashMap<String, String> = local_files
+        .iter()
+        .map(|f| {
+            (
+                f.relative_path.to_string_lossy().to_string(),
+                f.hash.clone(),
+            )
+        })
+        .collect();
+
+    let total_size: u64 = local_files.iter().map(|f| f.size).sum();
+
+    let snapshot = Snapshot::new(
+        message.map(String::from),
+        files_map,
+        parent_id,
+        total_size,
+        changed_files.len(),
+    );
+
+    let snapshot_id = snapshot.id.clone();
+    history.add_snapshot(snapshot);
+
+    storage.save_history(&project_name, &history).await?;
+
+    println!("\nスナップショット: {}", snapshot_id);
     if let Some(msg) = message {
-        println!("\nメッセージ: {}", msg);
+        println!("メッセージ: {}", msg);
     }
 
-    println!("\nプッシュ完了: s3://{}/{}/", storage.bucket(), project_name);
+    println!("プッシュ完了: s3://{}/{}/", storage.bucket(), project_name);
 
     Ok(())
 }
 
-async fn log_command(_project: Option<&str>, _limit: usize) -> Result<()> {
-    println!("log コマンドはフェーズ2で実装予定です");
+async fn log_command(project: Option<&str>, limit: usize) -> Result<()> {
+    let project_name = match project {
+        Some(p) => p.to_string(),
+        None => {
+            let path = fs::canonicalize(".")?;
+            extract_project_name(&path)
+        }
+    };
+
+    let storage = S3Storage::new(None).await?;
+    let history = storage.get_history(&project_name).await?;
+
+    match history {
+        None => {
+            println!("プロジェクト '{}' の履歴が見つかりません", project_name);
+            println!("まず 'gp push' でプッシュしてください");
+        }
+        Some(h) => {
+            println!("プロジェクト: {}\n", h.project_name);
+
+            if h.snapshots.is_empty() {
+                println!("スナップショットはありません");
+                return Ok(());
+            }
+
+            let total = h.snapshots.len();
+            for snapshot in h.snapshots.iter().rev().take(limit) {
+                println!("snapshot {}", snapshot.id);
+                if let Some(msg) = &snapshot.message {
+                    println!("メッセージ: {}", msg);
+                }
+                println!(
+                    "日時: {}",
+                    snapshot.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+                );
+                println!(
+                    "ファイル数: {} (変更: {})",
+                    snapshot.meta.file_count, snapshot.meta.changed_count
+                );
+                println!("サイズ: {}\n", format_size(snapshot.meta.total_size));
+            }
+
+            let shown = limit.min(total);
+            println!("(全{}件中{}件表示)", total, shown);
+        }
+    }
+
     Ok(())
 }
 
-async fn checkout_command(_snapshot: &str, _output: Option<&Path>) -> Result<()> {
-    println!("checkout コマンドはフェーズ2で実装予定です");
+async fn checkout_command(snapshot_id: &str, output: Option<&Path>) -> Result<()> {
+    let path = match output {
+        Some(p) => p.to_path_buf(),
+        None => std::env::current_dir()?,
+    };
+
+    let project_name = extract_project_name(&path);
+
+    let storage = S3Storage::new(None).await?;
+    let history = storage
+        .get_history(&project_name)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("プロジェクト '{}' の履歴が見つかりません", project_name))?;
+
+    let snapshot = history
+        .find_snapshot_by_prefix(snapshot_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!("スナップショットが見つかりません: {}", snapshot_id)
+        })?;
+
+    println!("復元中: {}", snapshot.id);
+    if let Some(msg) = &snapshot.message {
+        println!("メッセージ: {}", msg);
+    }
+    println!("ファイル数: {}\n", snapshot.files.len());
+
+    let pb = ProgressBar::new(snapshot.files.len() as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len}")
+            .expect("プログレスバーのテンプレートエラー")
+            .progress_chars("#>-"),
+    );
+
+    for (relative_path, hash) in &snapshot.files {
+        let target_path = path.join(relative_path);
+
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let data = storage.download_blob(&project_name, hash).await?;
+        fs::write(&target_path, data)?;
+
+        pb.inc(1);
+    }
+
+    pb.finish_with_message("復元完了");
+
+    println!("\n復元完了: {}", snapshot.id);
+    println!("ディレクトリ: {}", path.display());
+
     Ok(())
 }
 

@@ -2,9 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum GpError {
-    #[error("ファイルが見つかりません: {0}")]
-    FileNotFound(String),
-
     #[error("ディレクトリが見つかりません: {0}")]
     DirectoryNotFound(String),
 
@@ -19,6 +16,15 @@ pub enum GpError {
 
     #[error("設定エラー: {0}")]
     ConfigError(String),
+
+    #[error("スナップショットが見つかりません: {0}")]
+    SnapshotNotFound(String),
+
+    #[error("履歴が見つかりません")]
+    HistoryNotFound,
+
+    #[error("blobが見つかりません: {0}")]
+    BlobNotFound(String),
 }
 
 pub type Result<T> = std::result::Result<T, GpError>;
