@@ -14,10 +14,6 @@ pub struct Cli {
 pub enum Commands {
     /// プロジェクトをS3にプッシュ
     Push {
-        /// プロジェクトディレクトリのパス
-        #[arg(default_value = ".")]
-        path: PathBuf,
-
         /// コミットメッセージ
         #[arg(short, long)]
         message: Option<String>,
@@ -48,16 +44,8 @@ pub enum Commands {
     },
 
     /// プロジェクトの初期化
-    Init {
-        /// プロジェクトディレクトリのパス
-        #[arg(default_value = ".")]
-        path: PathBuf,
-    },
+    Init,
 
     /// 現在の状態を表示
-    Status {
-        /// プロジェクトディレクトリのパス
-        #[arg(default_value = ".")]
-        path: PathBuf,
-    },
+    Status,
 }

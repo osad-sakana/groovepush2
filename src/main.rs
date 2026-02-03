@@ -17,13 +17,11 @@ use storage::{extract_project_name, History, S3Storage, Snapshot};
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let current_dir = std::env::current_dir()?;
+
     match cli.command {
-        Commands::Push {
-            path,
-            message,
-            dry_run,
-        } => {
-            push_command(&path, message.as_deref(), dry_run).await?;
+        Commands::Push { message, dry_run } => {
+            push_command(&current_dir, message.as_deref(), dry_run).await?;
         }
         Commands::Log { project, limit } => {
             log_command(project.as_deref(), limit).await?;
@@ -31,11 +29,11 @@ async fn main() -> Result<()> {
         Commands::Checkout { snapshot, output } => {
             checkout_command(&snapshot, output.as_deref()).await?;
         }
-        Commands::Init { path } => {
-            init_command(&path)?;
+        Commands::Init => {
+            init_command(&current_dir)?;
         }
-        Commands::Status { path } => {
-            status_command(&path).await?;
+        Commands::Status => {
+            status_command(&current_dir).await?;
         }
     }
 
