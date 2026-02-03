@@ -1,0 +1,47 @@
+[package]
+name = "groovepush"
+version = "0.1.0"
+edition = "2024"
+description = "音楽制作者向けのCLIベースのS3バックアップツール"
+license = "MIT"
+
+[[bin]]
+name = "gp"
+path = "src/main.rs"
+
+[dependencies]
+# 非同期ランタイム
+tokio = { version = "1", features = ["full"] }
+
+# AWS SDK
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1"
+
+# ファイルスキャン（ripgrepエンジン）
+ignore = "0.4"
+
+# ローカルメタデータ
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# シリアライゼーション
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# 進捗バー
+indicatif = "0.17"
+
+# エラー処理
+anyhow = "1"
+thiserror = "2"
+
+# ファイルハッシュ
+sha2 = "0.10"
+
+# ディレクトリ
+dirs = "6"
+
+# 時間
+chrono = { version = "0.4", features = ["serde"] }
