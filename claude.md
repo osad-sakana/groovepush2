@@ -28,6 +28,7 @@
 
 - 作業1つごとに日本語で簡潔にgit commitする
 - `gp` コマンドとしてビルド (`cargo install --path .`)
+- 機能ごとに`/docs`やclaude.mdを更新する
 
 ## S3バケット構造
 
