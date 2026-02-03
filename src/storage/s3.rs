@@ -1,5 +1,6 @@
 use crate::error::{GpError, Result};
 use crate::scanner::ScannedFile;
+use crate::storage::history::History;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -147,6 +148,192 @@ impl S3Storage {
 
     pub fn bucket(&self) -> &str {
         &self.bucket
+    }
+
+    pub async fn blob_exists(&self, project_name: &str, hash: &str) -> Result<bool> {
+        let key = format!("{}/.gp/blobs/{}", project_name, hash);
+
+        let result = self
+            .client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .send()
+            .await;
+
+        Ok(result.is_ok())
+    }
+
+    pub async fn upload_blob(
+        &self,
+        project_name: &str,
+        hash: &str,
+        data: Vec<u8>,
+    ) -> Result<bool> {
+        if self.blob_exists(project_name, hash).await? {
+            return Ok(false);
+        }
+
+        let key = format!("{}/.gp/blobs/{}", project_name, hash);
+
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .body(ByteStream::from(data))
+            .send()
+            .await
+            .map_err(|e| GpError::S3Error(e.to_string()))?;
+
+        Ok(true)
+    }
+
+    pub async fn upload_blobs(
+        &self,
+        project_name: &str,
+        files: &[ScannedFile],
+    ) -> Result<usize> {
+        if files.is_empty() {
+            return Ok(0);
+        }
+
+        let pb = ProgressBar::new(files.len() as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} blobs")
+                .expect("プログレスバーのテンプレートエラー")
+                .progress_chars("#>-"),
+        );
+
+        let mut uploaded_count = 0;
+        let mut handles = Vec::new();
+
+        for file in files {
+            let client = self.client.clone();
+            let bucket = self.bucket.clone();
+            let project = project_name.to_string();
+            let hash = file.hash.clone();
+            let absolute_path = file.absolute_path.clone();
+            let pb = pb.clone();
+
+            let handle = tokio::spawn(async move {
+                let key = format!("{}/.gp/blobs/{}", project, hash);
+
+                let exists = client
+                    .head_object()
+                    .bucket(&bucket)
+                    .key(&key)
+                    .send()
+                    .await
+                    .is_ok();
+
+                if exists {
+                    pb.inc(1);
+                    return Ok::<bool, std::io::Error>(false);
+                }
+
+                let body = fs::read(&absolute_path).await?;
+                let stream = ByteStream::from(body);
+
+                client
+                    .put_object()
+                    .bucket(&bucket)
+                    .key(&key)
+                    .body(stream)
+                    .send()
+                    .await
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+
+                pb.inc(1);
+                Ok(true)
+            });
+
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            let was_uploaded = handle
+                .await
+                .map_err(|e| GpError::S3Error(e.to_string()))?
+                .map_err(|e| GpError::S3Error(e.to_string()))?;
+
+            if was_uploaded {
+                uploaded_count += 1;
+            }
+        }
+
+        pb.finish_and_clear();
+        Ok(uploaded_count)
+    }
+
+    pub async fn download_blob(
+        &self,
+        project_name: &str,
+        hash: &str,
+    ) -> Result<Vec<u8>> {
+        let key = format!("{}/.gp/blobs/{}", project_name, hash);
+
+        let output = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .send()
+            .await
+            .map_err(|e| GpError::BlobNotFound(format!("{}: {}", hash, e)))?;
+
+        let body = output
+            .body
+            .collect()
+            .await
+            .map_err(|e| GpError::S3Error(e.to_string()))?;
+
+        Ok(body.into_bytes().to_vec())
+    }
+
+    pub async fn get_history(&self, project_name: &str) -> Result<Option<History>> {
+        let key = format!("{}/.gp/history.json", project_name);
+
+        let result = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .send()
+            .await;
+
+        match result {
+            Ok(output) => {
+                let body = output
+                    .body
+                    .collect()
+                    .await
+                    .map_err(|e| GpError::S3Error(e.to_string()))?;
+                let bytes = body.into_bytes();
+                let content = String::from_utf8_lossy(&bytes);
+                let history: History = serde_json::from_str(&content)
+                    .map_err(|e| GpError::S3Error(e.to_string()))?;
+                Ok(Some(history))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    pub async fn save_history(&self, project_name: &str, history: &History) -> Result<()> {
+        let key = format!("{}/.gp/history.json", project_name);
+        let body = serde_json::to_string_pretty(history)
+            .map_err(|e| GpError::S3Error(e.to_string()))?;
+
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .body(ByteStream::from(body.into_bytes()))
+            .send()
+            .await
+            .map_err(|e| GpError::S3Error(e.to_string()))?;
+
+        Ok(())
     }
 }
 
