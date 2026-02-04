@@ -6,9 +6,12 @@ use aws_sdk_s3::Client;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Semaphore;
 
 const DEFAULT_BUCKET: &str = "groovepush-bucket";
+const MAX_CONCURRENT_UPLOADS: usize = 10;
 
 pub struct S3Storage {
     client: Client,
@@ -19,81 +22,24 @@ impl S3Storage {
     pub async fn new(bucket: Option<String>) -> Result<Self> {
         let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
         let client = Client::new(&config);
-        let bucket = bucket.unwrap_or_else(|| DEFAULT_BUCKET.to_string());
+        let bucket = bucket
+            .or_else(|| std::env::var("GROOVEPUSH_BUCKET").ok())
+            .unwrap_or_else(|| DEFAULT_BUCKET.to_string());
 
         Ok(Self { client, bucket })
-    }
-
-    pub async fn upload_files(
-        &self,
-        project_name: &str,
-        files: &[ScannedFile],
-    ) -> Result<()> {
-        if files.is_empty() {
-            println!("アップロードするファイルはありません");
-            return Ok(());
-        }
-
-        let pb = ProgressBar::new(files.len() as u64);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-                .expect("プログレスバーのテンプレートエラー")
-                .progress_chars("#>-"),
-        );
-
-        let mut handles = Vec::new();
-
-        for file in files {
-            let client = self.client.clone();
-            let bucket = self.bucket.clone();
-            let key = format!("{}/{}", project_name, file.relative_path.display());
-            let absolute_path = file.absolute_path.clone();
-            let pb = pb.clone();
-
-            let handle = tokio::spawn(async move {
-                let body = fs::read(&absolute_path).await?;
-                let stream = ByteStream::from(body);
-
-                client
-                    .put_object()
-                    .bucket(&bucket)
-                    .key(&key)
-                    .body(stream)
-                    .send()
-                    .await
-                    .map_err(|e| std::io::Error::other(e.to_string()))?;
-
-                pb.inc(1);
-                Ok::<_, std::io::Error>(())
-            });
-
-            handles.push(handle);
-        }
-
-        for handle in handles {
-            handle
-                .await
-                .map_err(|e| GpError::S3Error(e.to_string()))?
-                .map_err(|e| GpError::S3Error(e.to_string()))?;
-        }
-
-        pb.finish_with_message("アップロード完了");
-        Ok(())
     }
 
     pub async fn get_remote_state(
         &self,
         project_name: &str,
     ) -> Result<HashMap<String, String>> {
-        let mut state = HashMap::new();
-        let prefix = format!("{}/.gp/current_state.json", project_name);
+        let key = format!("{}/.gp/current_state.json", project_name);
 
         let result = self
             .client
             .get_object()
             .bucket(&self.bucket)
-            .key(&prefix)
+            .key(&key)
             .send()
             .await;
 
@@ -106,13 +52,16 @@ impl S3Storage {
                     .map_err(|e| GpError::S3Error(e.to_string()))?;
                 let bytes = body.into_bytes();
                 let content = String::from_utf8_lossy(&bytes);
-                state = serde_json::from_str(&content)
-                    .map_err(|e| GpError::S3Error(e.to_string()))?;
+                serde_json::from_str(&content).map_err(|e| GpError::S3Error(e.to_string()))
             }
-            Err(_) => {}
+            Err(e) => {
+                if e.as_service_error().map_or(false, |svc| svc.is_no_such_key()) {
+                    Ok(HashMap::new())
+                } else {
+                    Err(GpError::S3Error(e.to_string()))
+                }
+            }
         }
-
-        Ok(state)
     }
 
     pub async fn save_state(
@@ -150,44 +99,6 @@ impl S3Storage {
         &self.bucket
     }
 
-    pub async fn blob_exists(&self, project_name: &str, hash: &str) -> Result<bool> {
-        let key = format!("{}/.gp/blobs/{}", project_name, hash);
-
-        let result = self
-            .client
-            .head_object()
-            .bucket(&self.bucket)
-            .key(&key)
-            .send()
-            .await;
-
-        Ok(result.is_ok())
-    }
-
-    pub async fn upload_blob(
-        &self,
-        project_name: &str,
-        hash: &str,
-        data: Vec<u8>,
-    ) -> Result<bool> {
-        if self.blob_exists(project_name, hash).await? {
-            return Ok(false);
-        }
-
-        let key = format!("{}/.gp/blobs/{}", project_name, hash);
-
-        self.client
-            .put_object()
-            .bucket(&self.bucket)
-            .key(&key)
-            .body(ByteStream::from(data))
-            .send()
-            .await
-            .map_err(|e| GpError::S3Error(e.to_string()))?;
-
-        Ok(true)
-    }
-
     pub async fn upload_blobs(
         &self,
         project_name: &str,
@@ -205,7 +116,7 @@ impl S3Storage {
                 .progress_chars("#>-"),
         );
 
-        let mut uploaded_count = 0;
+        let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_UPLOADS));
         let mut handles = Vec::new();
 
         for file in files {
@@ -215,8 +126,12 @@ impl S3Storage {
             let hash = file.hash.clone();
             let absolute_path = file.absolute_path.clone();
             let pb = pb.clone();
+            let sem = semaphore.clone();
 
             let handle = tokio::spawn(async move {
+                let _permit =
+                    sem.acquire().await.map_err(|e| std::io::Error::other(e.to_string()))?;
+
                 let key = format!("{}/.gp/blobs/{}", project, hash);
 
                 let exists = client
@@ -251,6 +166,7 @@ impl S3Storage {
             handles.push(handle);
         }
 
+        let mut uploaded_count = 0;
         for handle in handles {
             let was_uploaded = handle
                 .await
@@ -315,7 +231,13 @@ impl S3Storage {
                     .map_err(|e| GpError::S3Error(e.to_string()))?;
                 Ok(Some(history))
             }
-            Err(_) => Ok(None),
+            Err(e) => {
+                if e.as_service_error().map_or(false, |svc| svc.is_no_such_key()) {
+                    Ok(None)
+                } else {
+                    Err(GpError::S3Error(e.to_string()))
+                }
+            }
         }
     }
 

@@ -133,10 +133,6 @@ impl Scanner {
         let result = hasher.finalize();
         Ok(format!("{:x}", result))
     }
-
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
 }
 
 /// 2つのファイルリストを比較し、変更されたファイルを検出

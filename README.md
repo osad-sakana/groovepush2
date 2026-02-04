@@ -22,11 +22,12 @@
 # インストール
 cargo install --path .
 
-# プロジェクト初期化
-gp init ~/Music/MyProject
+# プロジェクトディレクトリに移動して初期化
+cd ~/Music/MyProject
+gp init
 
 # S3にプッシュ
-gp push ~/Music/MyProject -m "ミックス完了"
+gp push -m "ミックス完了"
 ```
 
 ---
@@ -35,10 +36,13 @@ gp push ~/Music/MyProject -m "ミックス完了"
 
 | コマンド | 説明 |
 |---------|------|
-| `gp init <path>` | プロジェクト初期化 |
-| `gp push <path>` | S3にプッシュ |
+| `gp init` | プロジェクト初期化 |
+| `gp push` | S3にプッシュ |
 | `gp push --dry-run` | ドライラン |
-| `gp status <path>` | 状態確認 |
+| `gp status` | 状態確認 |
+| `gp log` | スナップショット履歴 |
+| `gp checkout <id>` | 過去の状態に復元 |
+| `gp clone <project>` | S3からクローン |
 
 ---
 

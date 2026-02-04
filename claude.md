@@ -32,10 +32,14 @@
 
 ## S3バケット構造
 
+バケット名は`GROOVEPUSH_BUCKET`環境変数で変更可能（デフォルト: `groovepush-bucket`）。
+
 ```
 s3://groovepush-bucket/
 └── {project_name}/
     ├── .gp/
-    │   └── current_state.json
+    │   ├── blobs/{sha256hash}     # Content-Addressable Storage
+    │   ├── current_state.json     # ファイルハッシュマップ
+    │   └── history.json           # スナップショット履歴
     └── (プロジェクトファイル)
 ```
