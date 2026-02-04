@@ -29,7 +29,7 @@ pub struct History {
 
 impl Snapshot {
     pub fn generate_id() -> String {
-        Utc::now().format("%Y%m%dT%H%M%SZ").to_string()
+        Utc::now().format("%Y%m%dT%H%M%S%.3fZ").to_string()
     }
 
     pub fn new(
@@ -69,19 +69,11 @@ impl History {
         self.snapshots.push(snapshot);
     }
 
-    pub fn find_snapshot(&self, id: &str) -> Option<&Snapshot> {
-        self.snapshots.iter().find(|s| s.id == id)
-    }
-
     pub fn find_snapshot_by_prefix(&self, prefix: &str) -> Option<&Snapshot> {
         self.snapshots
             .iter()
             .rev()
             .find(|s| s.id.starts_with(prefix))
-    }
-
-    pub fn latest_snapshot(&self) -> Option<&Snapshot> {
-        self.snapshots.last()
     }
 }
 
@@ -92,7 +84,7 @@ mod tests {
     #[test]
     fn test_snapshot_id_generation() {
         let id = Snapshot::generate_id();
-        assert_eq!(id.len(), 16);
+        assert_eq!(id.len(), 20);
         assert!(id.contains('T'));
         assert!(id.ends_with('Z'));
     }
@@ -112,7 +104,7 @@ mod tests {
         files.insert("test.txt".to_string(), "abc123".to_string());
 
         let snapshot = Snapshot {
-            id: "20260203T143052Z".to_string(),
+            id: "20260203T143052.000Z".to_string(),
             created_at: Utc::now(),
             message: Some("test".to_string()),
             files,
