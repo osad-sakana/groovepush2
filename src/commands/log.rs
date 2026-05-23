@@ -1,25 +1,20 @@
 use anyhow::Result;
 use std::fs;
 
-use crate::storage::{extract_project_name, S3Storage};
+use crate::storage::{extract_project_name, LocalStorage};
 use crate::utils::format_size;
 
-pub async fn run(project: Option<&str>, limit: usize) -> Result<()> {
-    let project_name = match project {
-        Some(p) => p.to_string(),
-        None => {
-            let path = fs::canonicalize(".")?;
-            extract_project_name(&path)
-        }
-    };
+pub fn run(limit: usize) -> Result<()> {
+    let path = fs::canonicalize(".")?;
+    let project_name = extract_project_name(&path);
 
-    let storage = S3Storage::new(None).await?;
-    let history = storage.get_history(&project_name).await?;
+    let storage = LocalStorage::new(&path)?;
+    let history = storage.get_history(&project_name)?;
 
     match history {
         None => {
-            println!("プロジェクト '{}' の履歴が見つかりません", project_name);
-            println!("まず 'gp push' でプッシュしてください");
+            println!("まだコミットがありません");
+            println!("'gp commit' でコミットしてください");
         }
         Some(h) => {
             println!("プロジェクト: {}\n", h.project_name);

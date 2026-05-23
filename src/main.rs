@@ -9,29 +9,25 @@ use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
     let current_dir = std::env::current_dir()?;
 
     match cli.command {
-        Commands::Push { message, dry_run } => {
-            commands::push::run(&current_dir, message.as_deref(), dry_run).await?;
+        Commands::Commit { message, dry_run } => {
+            commands::commit::run(&current_dir, message.as_deref(), dry_run)?;
         }
-        Commands::Log { project, limit } => {
-            commands::log::run(project.as_deref(), limit).await?;
+        Commands::Log { limit } => {
+            commands::log::run(limit)?;
         }
-        Commands::Checkout { snapshot, output } => {
-            commands::checkout::run(&snapshot, output.as_deref()).await?;
+        Commands::Checkout { snapshot } => {
+            commands::checkout::run(&snapshot)?;
         }
         Commands::Init => {
             commands::init::run(&current_dir)?;
         }
         Commands::Status => {
-            commands::status::run(&current_dir).await?;
-        }
-        Commands::Clone { project } => {
-            commands::clone::run(&project, &current_dir).await?;
+            commands::status::run(&current_dir)?;
         }
     }
 

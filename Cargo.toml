@@ -2,7 +2,7 @@
 name = "groovepush"
 version = "0.1.0"
 edition = "2021"
-description = "音楽制作者向けのCLIベースのS3バックアップツール"
+description = "音楽制作者向けのCLIベースのローカルバージョン管理ツール"
 license = "MIT"
 
 [[bin]]
@@ -10,13 +10,6 @@ name = "gp"
 path = "src/main.rs"
 
 [dependencies]
-# 非同期ランタイム
-tokio = { version = "1", features = ["full"] }
-
-# AWS SDK
-aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1"
-
 # ファイルスキャン（ripgrepエンジン）
 ignore = "0.4"
 

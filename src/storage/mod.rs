@@ -1,5 +1,14 @@
 pub mod history;
-pub mod s3;
+pub mod local;
 
 pub use history::{History, Snapshot};
-pub use s3::{extract_project_name, S3Storage};
+pub use local::LocalStorage;
+
+use std::path::Path;
+
+pub fn extract_project_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unnamed_project")
+        .to_string()
+}

@@ -1,31 +1,22 @@
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
-use std::path::Path;
 
-use crate::storage::{extract_project_name, S3Storage};
+use crate::storage::{extract_project_name, LocalStorage};
 
-pub async fn run(snapshot_id: &str, output: Option<&Path>) -> Result<()> {
-    let path = match output {
-        Some(p) => p.to_path_buf(),
-        None => std::env::current_dir()?,
-    };
-
+pub fn run(snapshot_id: &str) -> Result<()> {
+    let path = std::env::current_dir()?;
+    let path = fs::canonicalize(&path)?;
     let project_name = extract_project_name(&path);
 
-    let storage = S3Storage::new(None).await?;
+    let storage = LocalStorage::new(&path)?;
     let history = storage
-        .get_history(&project_name)
-        .await?
-        .ok_or_else(|| {
-            anyhow::anyhow!("プロジェクト '{}' の履歴が見つかりません", project_name)
-        })?;
+        .get_history(&project_name)?
+        .ok_or_else(|| anyhow::anyhow!("コミット履歴が見つかりません。'gp commit' を先に実行してください"))?;
 
     let snapshot = history
         .find_snapshot_by_prefix(snapshot_id)
-        .ok_or_else(|| {
-            anyhow::anyhow!("スナップショットが見つかりません: {}", snapshot_id)
-        })?;
+        .ok_or_else(|| anyhow::anyhow!("スナップショットが見つかりません: {}", snapshot_id))?;
 
     println!("復元中: {}", snapshot.id);
     if let Some(msg) = &snapshot.message {
@@ -48,7 +39,7 @@ pub async fn run(snapshot_id: &str, output: Option<&Path>) -> Result<()> {
             fs::create_dir_all(parent)?;
         }
 
-        let data = storage.download_blob(&project_name, hash).await?;
+        let data = storage.read_blob(hash)?;
         fs::write(&target_path, data)?;
 
         pb.inc(1);
