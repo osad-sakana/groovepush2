@@ -18,10 +18,10 @@ fn main() -> Result<()> {
             commands::commit::run(&current_dir, message.as_deref(), dry_run)?;
         }
         Commands::Log { limit } => {
-            commands::log::run(limit)?;
+            commands::log::run(&current_dir, limit)?;
         }
         Commands::Checkout { snapshot } => {
-            commands::checkout::run(&snapshot)?;
+            commands::checkout::run(&current_dir, &snapshot)?;
         }
         Commands::Init => {
             commands::init::run(&current_dir)?;

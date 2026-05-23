@@ -41,7 +41,7 @@ impl LocalStorage {
         Ok(())
     }
 
-    pub fn get_history(&self, project_name: &str) -> Result<Option<History>> {
+    pub fn get_history(&self) -> Result<Option<History>> {
         let path = self.gp_dir.join("history.json");
         if !path.exists() {
             return Ok(None);
@@ -49,9 +49,6 @@ impl LocalStorage {
         let content = fs::read_to_string(&path)?;
         let history: History = serde_json::from_str(&content)
             .map_err(|e| GpError::StorageError(e.to_string()))?;
-        if history.project_name != project_name {
-            return Ok(None);
-        }
         Ok(Some(history))
     }
 

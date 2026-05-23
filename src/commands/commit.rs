@@ -43,7 +43,7 @@ pub fn run(path: &Path, message: Option<&str>, dry_run: bool) -> Result<()> {
     storage.save_state(&local_files)?;
 
     let mut history = storage
-        .get_history(&project_name)?
+        .get_history()?
         .unwrap_or_else(|| History::new(&project_name));
 
     let parent_id = history.head.clone();

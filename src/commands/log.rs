@@ -1,15 +1,16 @@
 use anyhow::Result;
 use std::fs;
+use std::path::Path;
 
 use crate::storage::{extract_project_name, LocalStorage};
 use crate::utils::format_size;
 
-pub fn run(limit: usize) -> Result<()> {
-    let path = fs::canonicalize(".")?;
+pub fn run(path: &Path, limit: usize) -> Result<()> {
+    let path = fs::canonicalize(path)?;
     let project_name = extract_project_name(&path);
 
     let storage = LocalStorage::new(&path)?;
-    let history = storage.get_history(&project_name)?;
+    let history = storage.get_history()?;
 
     match history {
         None => {
@@ -17,7 +18,7 @@ pub fn run(limit: usize) -> Result<()> {
             println!("'gp commit' でコミットしてください");
         }
         Some(h) => {
-            println!("プロジェクト: {}\n", h.project_name);
+            println!("プロジェクト: {}\n", project_name);
 
             if h.snapshots.is_empty() {
                 println!("スナップショットはありません");
